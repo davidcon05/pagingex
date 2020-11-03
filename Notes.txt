@@ -1,0 +1,206 @@
+Part1: Address Translation
+*******************************************************************************************
+Stepping stone into pt 2
+    Given a hardcoded page table: represent as an array of integers if you want
+        int pTable[] = {2, 4, 1, 7, 3, 5, 6}
+    Steps Address Translation
+    1) Take the virtual address and break it into p and d. p = page table bits and d = offset bits
+    2) use p to locate the correct page table entry and 
+
+    Test
+    1) Sequence files contain raw binary data of 8bit unsigned long values
+    2) little indian format, hex
+
+    Part 2 will require this have the other bits of information in a page table entry
+    Example:  V.A : 0x44 == 0000 0100 0100            12 bit virtual address
+            p = 00000    d= 100 0100              10 bit physical address
+                                                   7 bit offset == d
+                                                   5 bit page number
+                                                  32 Page Table Entries
+            p = 0 which maps to the frame in pageTable[0] -> 2
+          P.A : 010 1000100 # frame number is only 3 bits       8 Physical frames in system
+          P.A: 0x144
+
+    Example: V.A. : 0x224 == 0010 0010 0100
+                p = 00100 # go to pTable[4] -> f = 3 -> 011
+                d = 010 0100
+         P.A. : 011  010 0100
+         P.A. : 01 1010 0100 -> 0x1A4
+
+    Using bitwise operations to accomplish above examples 
+        Given V.A. 0x144 -> 0001 0100 0100
+                    p = 00010     d = 100 0100
+                    pgNum = vAddr >> 7 // right shift VA 7 bits
+                    Options for getting offset
+                        1) bit mask
+                            offset = vAddr & 0x7f // 0x7f = 0111 1111, masks off first 7 bits
+                        2) modulo page size
+                            offset = vAddr % pgSize
+                        ************  if doing part 3 *********************
+                        ** Notes: to get pgNum shift need to do log_2(BPPG)
+                        **        to get offset for mask & pgSize-1
+***********************************************************************************************                        
+Part2: Physical Memory Management
+***********************************************************************************************
+Simulates the combination of address translation using the page table and PTE: translating virtual addresses to physical addresses. 
+Maintain the page table:
+    o track and validate PTE
+    o frame numbers associated with each PTE
+    o last time a page was referenced
+    o use LRU (least recently used)
+        - if i need a physical frame and there are none: steal the one from the Least Recently Used, last one from page table
+    o manage a free frames list (linked-list, doubly? probably need to create a data structure for this)
+part2.c
+
+phypages.c
+    o manages physical pages
+pagetable.c
+    o manages page table for the process 
+1) Initialize the page table (cold start scenario).
+    o all PTE will be set to invalid. 
+        - keep track of these page faults. every time you check the PTE, if its invalid, increment a counter for it
+    o intialize frame 0 as unavailable, already in use for OS
+2) implement and manage a freeFramesList (thinking simple LL)
+    o monotomically increasing order for selecting frames for page faults.
+        - first page fault == freeframe 1
+        * can use an array but we only take from this, therefore only need a counter: int nextFreeFrame = 1; on start up
+            - for each successive call use if (nextFreeFrame < 7) nextFreeFrame++; else  
+            ** for extra credit calc use specified PHYSMEM/BPPg
+            ** for ec, determine how many entries a pgTable contains = VIRTMEM / BPPg
+    o if (nextFreeFrame+1 > 7 ) <use LEAST Recently Used (LRU) page, stealing its frame
+        - Can use a struct of page table entries (monolithic pgTableof PTE)
+        - Can use all the fields and create several arrays that are referrenced by the PTE # as an index
+        Example: 2.1
+           v   f   r   valid bit, frame#, refCount       
+          ____________ pgTable                         _________FF
+        0| 0 |   |   |                               0|____1___|
+         ------------                                1|____0___|
+        1| 0 |   |   |                               2|____0___|
+         ------------                                3|____0___|
+     ... | 0 |   |   |                             ...|____-___|
+         ------------                                7|____0___|
+       31|_0_|___|___|
+            - initialiaze valid bits as 0. FreeFrame set index 0 to 1 because it used by OS? then rest are 0
+            - freeframes can be counter or list, would just start counter at 1
+            Scheme:
+            1) Translate virtual address:
+                VA: 0x168 == 0001 0110 1000 -> p = 00010 d = 110 1000
+            2) using p, we determine that we go to pgTable[2]
+            3) interpret valid bit, v, we see its 0 and this means we need a free frame
+                - go to FreeFrame list and get first free, or just assign f to nextFreeFrame++ 
+                    - pgTable[2]  ->  2|  1  |  1  |  0  |
+                                        int   int   u int
+                struct PGTABLE
+	            {
+		            int validBit;
+                    int frameNumy;
+                    unsigned int refCount;
+	            };
+                struct PGTABLE pgTable[VIRTMEM/BPPg];
+            4) perform translation 
+                - similar to part1.c but
+                    PA = frameNum << 7 | offset
+                        frameNum = 1 and d = 110 1000
+                        Translate f and d to PA: 001 1101000 -> 00 1110 1000 -> 0xE8
+
+        Example: 2.2
+            1) Take in VA
+                VA: 0x28C = 0010 1000 1100
+            2) Derive p and d from VA
+                    p = 00101 d = 000 1100
+            3) Access pgTable[p] check validBit 
+                    pgTable[00101] -> pgTable[5]
+                    validBit == 0 from initialization 
+            4) Interpret validBit. Handle page fault or populate frameNum
+                    if(validBit == 0) {
+                        pgTable[p].valid = 1; 
+                        nextFreeFrame++;
+                        pgTable[p].framNum = nextFreeFrame++; // 0=OS, 1=Ex1, 2=this.index
+                        pgFault++; // just need to increment this. intialize to 0 at start
+                        pgTable[p].refCount = refCount++; // didn't do this in 
+                    }
+                    else
+                        RLU scheme
+            5) Translation: determina PA
+                    PA = frameNum + 'd' -> 010 000 1100 -> 01 0000 1100
+                    PA = 0x10C
+        Example: 2.3
+            1) Take in VA
+                VA = 0x234 -> 0010 0011 0100
+            2) Derive p and d from VA
+                p = 0 0100 d = 011 0100
+            3) Access pgTable[p] and check .validBit and interpret. Handle pagefault of 0 and LRU if 1. Also populate frameNum and refCount
+                p = 4. pgTable[p/4].validBit if == 0 pagefault so 
+                pgTable[4].validBit = 1;
+                if(nextFreeFrame < 7)
+                    pgTable[4].frameNum = nextFreeFrame++; // we are on 3 now
+                pgTable[4].refCount = refCount++;
+                pgFault++;
+            4) Translation: determine PA
+                PA = 011 011 0100 -> 01 1011 0100 -> 0x1B4
+        Example: 2.4 Collision in pgTable, update the refCount
+            1) Take in VA
+                VA = 0x13F -> 0001 0011 1111
+            2) Derive p and d from VA
+                p = 0 0010 d = 011 0100
+            3) Access pgTable[p] and check .validBit and interpret. Handle pagefault of 0 and LRU if 1. Also populate frameNum and refCount
+                p = 2. 
+                if (pgTable[2].validBit == 0) { // pagefault  
+                    pgTable[2].validBit = 1;
+                    pageFault++; // must be here or it will be triggered by LRU
+                    if(nextFreeFrame < 7)
+                        pgTable[p].frameNum = nextFreeFrame++;
+                    else 
+                    // what do i do if i'm out of frames? LRU
+                }
+                // validBit == 1 so just need to update the reference bit to show its the most recently used page
+                pgTable[2].refCount = refCount++;
+                f = pgTable[p].frameNum
+            4) Translation: determine PA
+                // f = 1 d = 011 1111
+                PA = 001 011 1111 -> 00 1011 1111 -> 0xBF
+        Example: 2.5 All Free frames are used. nextFreeFrame > PHYSMEM/BPPg. All '...' means same as above
+            1) Take in VA
+                ...
+            2) Derive p and d from VA
+                ...
+            3) Access pgTable[p] and check .validBit. Interpret: 
+                ...
+                //  if(nextFreeFrame < (PHYSMEM/BBPG))
+                        ...
+                    // code in pageTable.c for leastRecentlyUsed()
+                    // get index for lowest, make this new one have its frameNum
+                    // change LRU index .validBit to 0
+            4) Translation: determine PA
+                ... 
+            *) Can speed this up if we map out all entries with validBits 1.
+                will want frame num, index, refcount.
+                search this list of (PHYSMEM/BBPG) instead of the entire pagetable.c
+                ** Makes sense but no need to implement with this small set
+        Example 2.6 We get a p that sends us to an index we've used and invalidated like 2.5
+            1) Take in VA
+                ...
+            2) Derive p and d from VA
+                ...
+            3) Access pgTable[p] and check .validBit. Interpret: 
+                // repeat all this fromm 2.5
+            4) Translation: determine PA
+
+            ** Summary: nothing changes from 2.5. We invalidate the index whose frameNum we stole, set this .validBit to 1, update frameNum, update refCount
+        
+        Do this for all of the seequence file
+
+    =========================================================================================================================
+    REPORT.txt
+    =========================================================================================================================
+        md5sum for each Outfile generated
+        num pgFaults for part 2 and part3 (if you do 3)
+    
+    Questions:          
+        1) What goes in part2.c?
+        2) What goes in physpages.c?
+        3) What goes in pagetable.c?
+
+Part3:
+Extra Credit
+    See ** notes
