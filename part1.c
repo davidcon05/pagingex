@@ -35,18 +35,44 @@ int main(int argc, char *argv[])
     if (argc != 3)
         printf("Usage error: ./part3 InFile OutFile\n");
     // Intialize variables and pageTable
-    const int pageTable[] = {2, 4, 1, 7, 3, 5, 6};
-    //const int physicalFrame[] = {0, }
-    FILE *fp;
-    char inBuf[VIRTMEM];
-    char *ptr;
-    unsigned int physAddress;
-    // Read in Infile
-    // Close Infile
-    // Translate
-    // Write to Outfile
-    // Close Outfile
+    const int pageTable[] = {2, 4, 1, 7, 3, 5, 6};    //
+    FILE *fpIn;                                       //
+    FILE *fpOut;                                      //
+    int i, inputIndex;                                //
+    unsigned int physAddrOut[16];                     //
+    unsigned long bRead;                              //
+    unsigned char virtualAddrIn[16];                  //
     
+    /* Initialize and error check file pointers */
+    if ((fpIn = fopen(argv[1], "rb")) == NULL) {
+        printf("Error trying to open file %s\n", argv[1]);
+        exit(1);
+    }
+
+    if ((fpOut = fopen(argv[2], "ab+")) == NULL) {
+        printf("Error trying to open file %s\n", argv[1]);
+        exit(2);
+    }
+    
+    /* Translate and Write to Outfile*/
+    inputIndex = 0;
+    // Read in 16 bytes at a time, translate one address at a time
+    while ((bRead = fread(virtualAddrIn, 1, sizeof(virtualAddrIn), fpIn)) > 0) 
+    {
+        // Translation Virtual Address to Physical Address
+        for (i = 0; i < 16; i++)
+        {
+            // translate
+            physAddrOut[i] = 
+            // Write to Outfile
+            fprintf(fpOut, "%02x ", virtualAddrIn[i]);
+
+        }
+    }
+
+    // Close File pointers
+    fclose(fpIn);
+    fclose(fpOut);
     
     return 0;
 }

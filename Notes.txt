@@ -3,16 +3,25 @@ Part1: Address Translation
 Stepping stone into pt 2
     Given a hardcoded page table: represent as an array of integers if you want
         int pTable[] = {2, 4, 1, 7, 3, 5, 6}
-    Steps Address Translation
-    1) Take the virtual address and break it into p and d. p = page table bits and d = offset bits
-    2) use p to locate the correct page table entry and 
 
-    Test
+    Will need to read in binary file of 8 bytes unsigned long and 
+    Write output to little endian
+    
+    =========================
+    Steps Address Translation
+    ==========================
+    1) Take the virtual address and break it into p and d. 
+        p = page table bits and d = offset bits
+    2) use p to locate the correct page table entry with frameNumber 'f'
+    3) concat 'f' with offset 'd' to make the physical address 
+    =========
+    Testing
+    =========
     1) Sequence files contain raw binary data of 8bit unsigned long values
-    2) little indian format, hex
+    2) little endian format, hex
 
     Part 2 will require this have the other bits of information in a page table entry
-    Example:  V.A : 0x44 == 0000 0100 0100            12 bit virtual address
+    Example:  V.A : 0x44 == 0000 0100 0100           12 bit virtual address
             p = 00000    d= 100 0100              10 bit physical address
                                                    7 bit offset == d
                                                    5 bit page number
